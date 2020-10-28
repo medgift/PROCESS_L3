@@ -326,7 +326,7 @@ plt.rcParams['figure.figsize']=(25,25)
 plt.imshow(im_contour)
 #plt.imshow(heatmap, alpha=0.5)
 plt.imshow(interpolated_heatmap, alpha=0.5)
-plf.savefig('results/{}_interpolated'.format(file_name))
+plt.savefig('results/{}_interpolated'.format(file_name))
 
 
 # In[24]:
