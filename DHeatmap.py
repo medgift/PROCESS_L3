@@ -14,6 +14,10 @@ from os.path import join, isfile, exists, splitext
 import cv2
 import numpy as np
 from PIL import Image
+# By IVAN: Fix no $DISPLAY set error message----------------
+import matplotlib as mpl
+#-----------------------------------------------------------
+mpl.use('Agg')
 import matplotlib.pyplot as plt
 from skimage import measure
 import time
