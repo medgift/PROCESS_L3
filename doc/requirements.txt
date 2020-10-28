@@ -1,4 +1,4 @@
-openslide
+openslide-python
 opencv
 numpy
 PIL
@@ -17,3 +17,4 @@ re
 math
 collections
 subprocess
+multiprocessing

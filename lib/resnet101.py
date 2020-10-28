@@ -96,7 +96,7 @@ def conv_block(input_tensor, kernel_size, filters, stage, block, strides=(2, 2))
     x = Activation('relu', name='res' + str(stage) + block + '_relu')(x)
     return x
 
-def resnet101_model(img_rows, img_cols, color_type=1, num_classes=None):
+def resnet101_model(img_rows, img_cols, color_type=1, num_classes=None, imagenet_path=""):
     """
     Resnet 101 Model for Keras
 
@@ -157,7 +157,7 @@ def resnet101_model(img_rows, img_cols, color_type=1, num_classes=None):
       weights_path = 'imagenet_models/resnet101_weights_th.h5'
     else:
       # Use pre-trained weights for Tensorflow backend
-      weights_path = '/home/mara/camnet/imagenet_models/resnet101_weights_tf.h5'
+      weights_path = imagenet_path
 
     model.load_weights(weights_path, by_name=True)
 

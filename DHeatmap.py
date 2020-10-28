@@ -1,23 +1,21 @@
-
+#!/usr/bin/env python
 # coding: utf-8
 
 # In[1]:
 
 
+import sys
+sys.path.append('lib')
+# lib contains util, functions, models, image, normalizers, extract_xml, functools
+
 from openslide import OpenSlide
 from os import listdir
 from os.path import join, isfile, exists, splitext
-import sys
 import cv2
 import numpy as np
 from PIL import Image
 import matplotlib.pyplot as plt
-from util import otsu_thresholding, center_of_slide_level,connected_component_image
 from skimage import measure
-from scipy import ndimage
-from functions import *
-from models import getModel
-import matplotlib.pyplot as plt
 import time
 from skimage.viewer import ImageViewer
 import tensorflow as tf
@@ -26,32 +24,112 @@ import warnings
 warnings.filterwarnings("ignore")   
 from scipy import interpolate
 
-files =os.listdir("/mnt/nas4/datasets/ToReadme/CAMELYON17/lesion_annotations")
-print files[10][:-4]
+from util import otsu_thresholding, center_of_slide_level,connected_component_image
+from scipy import ndimage
+from functions import *
+#from models import getModel
 
 
-# In[1]:
+# In[6]:
 
 
+from keras.preprocessing import image
+from keras.applications import resnet50
+import keras.applications.inception_v3
+import sys
+sys.path.insert(0, '/mnt/nas2/results/Models')
+from keras.models import Sequential, Model
+from keras.layers import Dense, Dropout, Flatten
+from keras.layers import Conv2D, MaxPooling2D
+from keras import backend as K
+from keras import optimizers
+from keras.preprocessing.image import ImageDataGenerator, array_to_img, img_to_array, load_img
+from resnet101 import *
+from googlenet import *
+from keras.preprocessing import image
 import tensorflow as tf
-tf.__version__
+
+def getModel(net_settings, num_classes=1, imagenet_weights_path=""):
+    '''
+		Should be modified with model type as input and returns the desired model
+    '''
+    if net_settings['model_type'] == 'resnet':
+        base_model = resnet50.ResNet50(include_top=True, weights='imagenet')
+        finetuning = Dense(1, activation='sigmoid', name='predictions')(base_model.layers[-2].output)
+        model = Model(input=base_model.input, output=finetuning)
+	model.compile(loss=net_settings['loss'],
+			optimizer=optimizers.SGD(lr=net_settings['lr'],  momentum=0.9, decay=1e-6, nesterov=True),
+			metrics=['accuracy'])
+    	return model
+    elif net_settings['model_type'] == 'resnet101':
+	model = resnet101_model(224, 224, 3, 1,imagenet_weights_path)
+	return model
+    elif net_settings['model_type']=='inceptionv3':
+        base_model = keras.applications.inception_v3.InceptionV3(include_top=True, weights='imagenet')
+        finetuning = Dense(1, activation='sigmoid', name='predictions')(base_model.layers[-2].output)
+        model = Model(input=base_model.input, output=finetuning)
+        model.compile(loss=net_settings['loss'],
+                      optimizer=optimizers.SGD(lr=net_settings['lr'],  momentum=0.9, decay=1e-6, nesterov=True),
+                      metrics=['accuracy'])
+        return model
+    elif net_settings['model_type'] == 'googlenet':
+        model = check_print()
+	return model
+    else:
+	print '[models] Ugggh. Not ready for this yet.'
+	exit(0)
+	return None
 
 
-# In[2]:
+# In[7]:
 
 
 import setproctitle
 EXPERIMENT_TYPE = 'distributed_inference'
 # SET PROCESS TITLE
 setproctitle.setproctitle('UC1_{}_{}'.format(EXPERIMENT_TYPE, 'mara'))
+CONFIG_FILE='doc/config.cfg'
 
 
-# In[67]:
+# In[12]:
+
+
+config = ConfigParser.RawConfigParser(allow_no_value = True)
+config.read(CONFIG_FILE)
+
+input_file = config.get("input", "file_name")
+xml_source = config.get("settings", "xml_source_fld")
+data_folder = config.get("settings", "source_fld")
+imagenet_weights_path = config.get("input", "imagenet_weights")
+model_weights=config.get("input", "model_weights")
+
+
+# In[13]:
+
+
+os.environ["CUDA_VISIBLE_DEVICES"]="0"
+config = tf.ConfigProto()
+config.gpu_options.allow_growth = True
+#config.gpu_options.visible_device_list = sys.argv[2] 
+keras.backend.tensorflow_backend.set_session(tf.Session(config=config))
+
+folder='./model_weights/'
+#0609-1648/'
+
+
+settings = parseTrainingOptions(CONFIG_FILE)
+print settings
+
+model=getModel(settings, imagenet_weights_path=imagenet_weights_path)
+model.load_weights(model_weights)
+
+
+# In[14]:
 
 
 pwd=""
 from os.path import join,isfile, exists, splitext
-def get_folder(file_name, path="/mnt/nas4/datasets/ToReadme/CAMELYON17/"):
+def get_folder(file_name, path=""):
     for fold in os.listdir(path)[:4]:
         m = file_name+".tif"
         if m in os.listdir(path+fold):
@@ -88,10 +166,12 @@ def apply_morph(otsu_im):
     return opening_1
 
 training_slide=True
-file_name='patient_051_node_2'
-xml_path="/mnt/nas4/datasets/ToReadme/CAMELYON17/lesion_annotations/"+file_name+'.xml'
-folder = get_folder(file_name)
-filename ="/mnt/nas4/datasets/ToReadme/CAMELYON17/"+folder+"/"+file_name+'.tif' 
+file_name = input_file
+print file_name
+xml_path=xml_source+file_name+'.xml'
+folder = get_folder(file_name,path=data_folder)
+print folder
+filename =data_folder+folder+"/"+file_name+'.tif' 
 slide_path = join(pwd,filename)
 print "file name : "+slide_path+"\n"
 if isfile(slide_path):
@@ -120,35 +200,10 @@ else:
     slide, annotations_mask, rgb_im, im_contour = preprocess(slide_path, xml_path, slide_level=slide_level)
 
 
-# In[68]:
-
-
-os.environ["CUDA_VISIBLE_DEVICES"]="0"
-config = tf.ConfigProto()
-config.gpu_options.allow_growth = True
-#config.gpu_options.visible_device_list = sys.argv[2] 
-keras.backend.tensorflow_backend.set_session(tf.Session(config=config))
-
-folder='./cam1617_2009/'
-#0609-1648/'
-CONFIG_FILE=folder+'config.cfg'
-
-settings = parseTrainingOptions(CONFIG_FILE)
-print settings
-
-model=getModel(settings)
-model.load_weights(folder+'tumor_classifier.h5')
-
-
-# In[69]:
+# In[16]:
 
 
 dmodels={}
-
-
-# In[70]:
-
-
 import subprocess as sp
 def get_gpu_memory():
     _output_to_list = lambda x: x.decode('ascii').split('\n')[:-1]
@@ -169,18 +224,18 @@ print "Distributing inference over {} model copies".format(n_models)
 for i in range(0, n_models):
     try: 
         print "Instantiating model n. ", i
-        nmodel=getModel(settings)
+        nmodel=getModel(settings, imagenet_weights_path=imagenet_weights_path)
         print "Loading weights..."
-        nmodel.load_weights(folder+'tumor_classifier.h5')
+        nmodel.load_weights(model_weights)
         print "Adding model to available models."
         dmodels[i]=nmodel
         i+=1
     except:
-        print "Something went wrong: MEMO_REQUIREMENT TOO LITTLE"
+        print "Something went wrong. Check the memory status. Otherwise failed loading model weights"
         break
 
 
-# In[71]:
+# In[17]:
 
 
 import multiprocessing
@@ -194,7 +249,7 @@ flag=False
 print 'Heatmap dimensions: ', slide.level_dimensions[slide_level][1], slide.level_dimensions[slide_level][0]
 
 
-# In[72]:
+# In[25]:
 
 
 heatmap=np.zeros((slide.level_dimensions[slide_level][1], slide.level_dimensions[slide_level][0]))
@@ -267,23 +322,10 @@ plt.rcParams['figure.figsize']=(25,25)
 plt.imshow(im_contour)
 #plt.imshow(heatmap, alpha=0.5)
 plt.imshow(interpolated_heatmap, alpha=0.5)
+plf.savefig('results/{}_interpolated'.format(file_name))
 
 
-# In[73]:
-
-
-interpolated_heatmap>0.5
-
-
-# In[74]:
-
-
-plt.imshow(im_contour)
-#plt.imshow(heatmap, alpha=0.5)
-plt.imshow(interpolated_heatmap[np.argwhere(interpolated_heatmap>0.5)], alpha=0.5, cmap='jet')
-
-
-# In[ ]:
+# In[24]:
 
 
 interpolated_heatmap = interpolate.griddata(points, values,
@@ -296,81 +338,9 @@ plt.rcParams['figure.figsize']=(25,25)
 plt.imshow(im_contour)
 #plt.imshow(heatmap, alpha=0.5)
 plt.imshow(heatmap, cmap="jet", alpha=0.5)
-
-
-# In[ ]:
-
-
-plt.imshow(heatmap)
-
-
-# In[ ]:
-
-
-resolution 
-
-
-# In[ ]:
-
-
-
-points = np.asarray(seen.nonzero()).T
-values = heatmap[heatmap.nonzero()]
-
-grid_x, grid_y = np.mgrid[0:slide.level_dimensions[slide_level][1]:1, 
-                          0:slide.level_dimensions[slide_level][0]:1]
-interpolated_heatmap = interpolate.griddata(points, values,
-                                      (grid_x, grid_y), 
-                                        fill_value=0.
-                                       )
-print 'Number of patches analysed: ', np.sum(seen)
-print 'Elapsed time: ', end_time-start_time
-plt.rcParams['figure.figsize']=(25,25)
-plt.imshow(im_contour)
-#plt.imshow(heatmap, alpha=0.5)
-plt.imshow(interpolated_heatmap, alpha=0.5)
-
-
-# In[ ]:
-
-
-interpolated_heatmap[np.argwhere(interpolated_heatmap>0.5)].shape()
-
-
-# In[ ]:
-
-
-interpolated_heatmap.shape
-
-
-# In[ ]:
-
-
-th=0.9
-
-
-# In[ ]:
-
-
-thr_heatmap=interpolated_heatmap[np.argwhere(interpolated_heatmap>th).T[0], np.argwhere(interpolated_heatmap>th).T[1]]
-
-
-# In[ ]:
-
-
-thr_heat=np.zeros((slide.level_dimensions[slide_level][1], slide.level_dimensions[slide_level][0]))
-
-
-# In[ ]:
-
-
-thr_heat[np.argwhere(interpolated_heatmap>th).T[0], np.argwhere(interpolated_heatmap>th).T[1]]=interpolated_heatmap[np.argwhere(interpolated_heatmap>th).T[0], np.argwhere(interpolated_heatmap>th).T[1]]
-
-
-# In[ ]:
-
-
-plt.rcParams['figure.figsize']=(25,25)
-plt.imshow(im_contour)
-plt.imshow(thr_heat, alpha=0.5, cmap='jet')
+plt.savefig('results/{}'.format(file_name))
+f=open('results/{}_log.txt'.format(file_name),'w')
+f.write('Number of patches analysed: {}\n'.format(np.sum(seen)))
+f.write('Elapsed time: {} s'.format(end_time-start_time))
+f.close()
 
