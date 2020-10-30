@@ -1,2 +1,2 @@
 Number of patches analysed: 26824.0
-Elapsed time: 504.095700979 s
+Elapsed time: 592.045596838 s
