@@ -95,7 +95,7 @@ setproctitle.setproctitle('UC1_{}_{}'.format(EXPERIMENT_TYPE, 'mara'))
 CONFIG_FILE='doc/config.cfg'
 
 
-# In[4]:
+# In[20]:
 
 
 config = ConfigParser.RawConfigParser(allow_no_value = True)
@@ -107,9 +107,10 @@ data_folder = config.get("settings", "source_fld")
 imagenet_weights_path = config.get("input", "imagenet_weights")
 model_weights=config.get("input", "model_weights")
 interpret=config.get("input", "interpret")
+n_samples_max=config.get("input", "n_samples")
 
 
-# In[5]:
+# In[14]:
 
 
 os.environ["CUDA_VISIBLE_DEVICES"]="0"
@@ -129,7 +130,7 @@ model=getModel(settings, imagenet_weights_path=imagenet_weights_path)
 model.load_weights(model_weights)
 
 
-# In[6]:
+# In[ ]:
 
 
 pwd=""
@@ -199,13 +200,12 @@ slide, rgb_im, otsu_im = preprocess_test_data(slide_path, slide_level=7, patch_s
 
 if not training_slide:
     slide, rgb_im, otsu_im = preprocess_test_data(slide_path, slide_level=7, patch_size=224, verbose=1)
-
-    ## to be continued....
+    ## not supported 
 else:
     slide, annotations_mask, rgb_im, im_contour = preprocess(slide_path, xml_path, slide_level=slide_level)
 
 
-# In[7]:
+# In[16]:
 
 
 dmodels={}
@@ -223,10 +223,8 @@ free_gpu_memory_ = get_gpu_memory()
 MEMO_REQUIREMENT = 3000.
 n_models = int(free_gpu_memory_[0] / MEMO_REQUIREMENT)
 # Distribute inference : GPU Parallelism
-#while True:
-#    i=1
 print "Distributing inference over {} model copies".format(n_models)
-for i in range(0, 1):# n_models):
+for i in range(0, n_models):
     try: 
         print "Instantiating model n. ", i
         nmodel=getModel(settings, imagenet_weights_path=imagenet_weights_path)
@@ -240,7 +238,7 @@ for i in range(0, 1):# n_models):
         break
 
 
-# In[8]:
+# In[17]:
 
 
 import multiprocessing
@@ -250,7 +248,6 @@ y_low, x = np.unique(np.where(opening_1>0)[0]), np.unique(np.where(opening_1>0)[
 patch_size=224
 patches=[]
 flag=False
-#sebas: here you can leave the code as it is
 print 'Heatmap dimensions: ', slide.level_dimensions[slide_level][1], slide.level_dimensions[slide_level][0]
 
 
@@ -276,7 +273,6 @@ def worker(slide, locations_vector, locations_index, data_batch, data_locations,
         #l[0] is x, l[1] is y
         patch=np.asarray(slide.read_region((l[0]*128,l[1]*128),0,(224,224)))[...,:3]
         batch.append(np.asarray(patch)[...,:3])
-        #Image.fromarray(patch).save('prova_batch/{}-{}.png'.format(l[1],l[0]))
     data_batch[0]=batch
     data_locations[0]=batch_locations
     with locations_index.get_lock():
@@ -291,7 +287,6 @@ locations = {}
 for b in range(n_models):
     batches[b]=manager.dict()
     locations[b]=manager.dict()
-#batches=manager.dict()
 batch_size=32
 while locations_index.value < len(final_p):
     jobs = []
@@ -330,7 +325,6 @@ print 'Number of patches analysed: ', np.sum(seen)
 print 'Elapsed time: ', end_time-start_time
 plt.rcParams['figure.figsize']=(25,25)
 plt.imshow(im_contour)
-#plt.imshow(heatmap, alpha=0.5)
 plt.imshow(interpolated_heatmap, alpha=0.5)
 plt.savefig('results/{}_interpolated'.format(file_name))
 
@@ -346,7 +340,6 @@ print 'Number of patches analysed: ', np.sum(seen)
 print 'Elapsed time: ', end_time-start_time
 plt.rcParams['figure.figsize']=(25,25)
 plt.imshow(im_contour)
-#plt.imshow(heatmap, alpha=0.5)
 plt.imshow(heatmap, cmap="jet", alpha=0.5)
 plt.savefig('results/{}'.format(file_name))
 f=open('results/{}_log.txt'.format(file_name),'w')
@@ -355,7 +348,7 @@ f.write('Elapsed time: {} s'.format(end_time-start_time))
 f.close()
 
 
-# In[12]:
+# In[25]:
 
 
 if interpret:
@@ -379,7 +372,6 @@ if interpret:
             #l[0] is x, l[1] is y
             patch=np.asarray(slide.read_region((l[0]*128,l[1]*128),0,(224,224)))[...,:3]
             batch.append(np.asarray(patch)[...,:3])
-            #Image.fromarray(patch).save('prova_batch/{}-{}.png'.format(l[1],l[0]))
         data_batch[0]=batch
         data_locations[0]=batch_locations
         with locations_index.get_lock():
@@ -394,38 +386,46 @@ if interpret:
     for b in range(n_models):
         batches[b]=manager.dict()
         locations[b]=manager.dict()
-    #batches=manager.dict()
     batch_size=32
     input_size = model.input_shape[1:-1]
-    while locations_index.value < len(final_p):
-        jobs = []
-        for m in range(n_models):
-            p = multiprocessing.Process(target=worker, 
-                                        args=(slide, 
-                                              final_p, 
-                                              locations_index, 
-                                              batches[m], 
-                                              locations[m]))
-            jobs.append(p)
-            p.start() 
-            p.join()
-            predictions=dmodels[m].predict(np.reshape(batches[m][0],(len(batches[m][0]),224,224,3)))
-            
-            for p in range(len(predictions)):
-                x_b, y_b=locations[m][0][p][0], locations[m][0][p][1]
-                pred_layer = dmodels[m].layers[-1].name
-                inputs = np.expand_dims(batches[m][0][p], axis=0)
-                conv_layer='res5c_relu'
-                cam_=cam(model, inputs, conv_layer, input_size)
-                plt.figure()
-                plt.imshow(cam_)
-                plt.rcParams['figure.figsize']=(5,5)
-                plt.savefig('{}/{}_{}'.format(new_folder,x_b,y_b))
-                plt.figure()
-                plt.imshow(np.uint8(batches[m][0][p]))
-                plt.imshow(cam_, alpha=.5)
-                plt.savefig('{}/{}_{}_overlay'.format(new_folder,x_b,y_b))
-                #heatmap[y_b, x_b]=predictions[p][0]
-                #seen[y_b,x_b]=1
-    end_time = time.time()
+    
+    n_samples=0
+    for n_samples in range(int(n_samples_max)):
+        while locations_index.value < len(final_p):
+            jobs = []
+            for m in range(n_models):
+                p = multiprocessing.Process(target=worker, 
+                                            args=(slide, 
+                                                  final_p, 
+                                                  locations_index, 
+                                                  batches[m], 
+                                                  locations[m]))
+                jobs.append(p)
+                p.start() 
+                p.join()
+                predictions=dmodels[m].predict(np.reshape(batches[m][0],(len(batches[m][0]),224,224,3)))
+
+                for p in range(len(predictions)):
+                    x_b, y_b=locations[m][0][p][0], locations[m][0][p][1]
+                    pred_layer = dmodels[m].layers[-1].name
+                    inputs = np.expand_dims(batches[m][0][p], axis=0)
+                    conv_layer='res5c_relu'
+                    cam_=cam(model, inputs, conv_layer, input_size)
+                    plt.figure()
+                    plt.imshow(cam_)
+                    plt.rcParams['figure.figsize']=(5,5)
+                    plt.savefig('{}/{}_{}'.format(new_folder,x_b,y_b))
+                    plt.figure()
+                    plt.imshow(np.uint8(batches[m][0][p]))
+                    plt.imshow(cam_, alpha=.5)
+                    plt.savefig('{}/{}_{}_overlay'.format(new_folder,x_b,y_b))
+                    #heatmap[y_b, x_b]=predictions[p][0]
+                    #seen[y_b,x_b]=1
+        end_time = time.time()
+
+
+# In[23]:
+
+
+int(n_samples_max)
 
