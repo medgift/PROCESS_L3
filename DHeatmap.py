@@ -330,7 +330,7 @@ while locations_index.value < len(final_p):
         for p in range(len(predictions)):
             x_b, y_b=locations[m][0][p][0], locations[m][0][p][1]
             heatmap[y_b, x_b]=predictions[p][0]
-            if interpret and predictions[p][0]>0.90 and n_samples<int(n_samples_max):
+            if interpret and predictions[p][0]>0.80 and n_samples<int(n_samples_max):
                 print n_samples, n_samples_max, predictions[p][0], n_samples<int(n_samples_max)
                 pred_layer = dmodels[m].layers[-1].name
                 inputs = np.expand_dims(batches[m][0][p], axis=0)
