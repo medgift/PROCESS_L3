@@ -55,19 +55,19 @@ import tensorflow as tf
 
 def getModel(net_settings, num_classes=1, imagenet_weights_path=""):
     '''
-		Should be modified with model type as input and returns the desired model
+        Should be modified with model type as input and returns the desired model
     '''
     if net_settings['model_type'] == 'resnet':
         base_model = resnet50.ResNet50(include_top=True, weights='imagenet')
         finetuning = Dense(1, activation='sigmoid', name='predictions')(base_model.layers[-2].output)
         model = Model(input=base_model.input, output=finetuning)
-	model.compile(loss=net_settings['loss'],
-			optimizer=optimizers.SGD(lr=net_settings['lr'],  momentum=0.9, decay=1e-6, nesterov=True),
-			metrics=['accuracy'])
-    	return model
+        model.compile(loss=net_settings['loss'],
+        optimizer=optimizers.SGD(lr=net_settings['lr'],  momentum=0.9, decay=1e-6, nesterov=True),
+        metrics=['accuracy'])
+        return model
     elif net_settings['model_type'] == 'resnet101':
-	model = resnet101_model(224, 224, 3, 1,imagenet_weights_path)
-	return model
+        model = resnet101_model(224, 224, 3, 1,imagenet_weights_path)
+        return model
     elif net_settings['model_type']=='inceptionv3':
         base_model = keras.applications.inception_v3.InceptionV3(include_top=True, weights='imagenet')
         finetuning = Dense(1, activation='sigmoid', name='predictions')(base_model.layers[-2].output)
@@ -78,11 +78,11 @@ def getModel(net_settings, num_classes=1, imagenet_weights_path=""):
         return model
     elif net_settings['model_type'] == 'googlenet':
         model = check_print()
-	return model
+        return model
     else:
-	print '[models] Ugggh. Not ready for this yet.'
-	exit(0)
-	return None
+        print '[models] Ugggh. Not ready for this yet.'
+        exit(0)
+        return None
 
 
 # In[3]:
@@ -95,7 +95,7 @@ setproctitle.setproctitle('UC1_{}_{}'.format(EXPERIMENT_TYPE, 'mara'))
 CONFIG_FILE='doc/config.cfg'
 
 
-# In[20]:
+# In[4]:
 
 
 config = ConfigParser.RawConfigParser(allow_no_value = True)
@@ -106,11 +106,11 @@ xml_source = config.get("settings", "xml_source_fld")
 data_folder = config.get("settings", "source_fld")
 imagenet_weights_path = config.get("input", "imagenet_weights")
 model_weights=config.get("input", "model_weights")
-interpret=config.get("input", "interpret")
+interpret_=config.get("input", "interpret")
 n_samples_max=config.get("input", "n_samples")
 
 
-# In[14]:
+# In[5]:
 
 
 os.environ["CUDA_VISIBLE_DEVICES"]="0"
@@ -130,7 +130,26 @@ model=getModel(settings, imagenet_weights_path=imagenet_weights_path)
 model.load_weights(model_weights)
 
 
-# In[ ]:
+# In[6]:
+
+
+if interpret_:
+    import interpret
+    reload(interpret)
+    from interpret import *
+    print "interpreting network"
+    res_folder = 'results/'
+    new_folder = res_folder + 'interpretability/'
+    if not os.path.exists(new_folder):
+        os.makedirs(new_folder)
+    new_folder = res_folder + 'interpretability/{}'.format(input_file)
+    if not os.path.exists(new_folder):
+        os.makedirs(new_folder)
+    n_samples=0
+    input_size=(224,224)
+
+
+# In[7]:
 
 
 pwd=""
@@ -200,12 +219,13 @@ slide, rgb_im, otsu_im = preprocess_test_data(slide_path, slide_level=7, patch_s
 
 if not training_slide:
     slide, rgb_im, otsu_im = preprocess_test_data(slide_path, slide_level=7, patch_size=224, verbose=1)
-    ## not supported 
+
+    ## to be continued....
 else:
     slide, annotations_mask, rgb_im, im_contour = preprocess(slide_path, xml_path, slide_level=slide_level)
 
 
-# In[16]:
+# In[8]:
 
 
 dmodels={}
@@ -238,7 +258,7 @@ for i in range(0, n_models):
         break
 
 
-# In[17]:
+# In[9]:
 
 
 import multiprocessing
@@ -248,10 +268,11 @@ y_low, x = np.unique(np.where(opening_1>0)[0]), np.unique(np.where(opening_1>0)[
 patch_size=224
 patches=[]
 flag=False
-print 'Heatmap dimensions: ', slide.level_dimensions[slide_level][1], slide.level_dimensions[slide_level][0]
+dim_x, dim_y=slide.level_dimensions[slide_level]
+print 'Heatmap dimensions: ', dim_x, dim_y
 
 
-# In[9]:
+# In[10]:
 
 
 heatmap=np.zeros((slide.level_dimensions[slide_level][1], slide.level_dimensions[slide_level][0]))
@@ -260,11 +281,18 @@ resolution=2
 mesh = np.meshgrid(np.arange(0, slide.level_dimensions[slide_level][0], 2),np.arange(0, slide.level_dimensions[slide_level][1], 2))
 positions = np.vstack(map(np.ravel, mesh)).T
 final_p=[]
+to_interpret=[]
+to_interpret_loc=[]
 for p in positions:
     x,y=p[0],p[1]
     if np.sum(opening_1[y-(resolution/2):y+(resolution/2), x-(resolution/2):x+(resolution/2)])>0:
-        final_p.append(p)
-n_models=1        
+        if y>50 and y<(dim_y-50) and x>50 and x<(dim_x-50):
+            final_p.append(p)
+
+
+# In[ ]:
+
+
 def worker(slide, locations_vector, locations_index, data_batch, data_locations, batch_size=32):
     """worker function for multiprocessing"""
     batch=[]
@@ -273,6 +301,7 @@ def worker(slide, locations_vector, locations_index, data_batch, data_locations,
         #l[0] is x, l[1] is y
         patch=np.asarray(slide.read_region((l[0]*128,l[1]*128),0,(224,224)))[...,:3]
         batch.append(np.asarray(patch)[...,:3])
+        #Image.fromarray(patch).save('prova_batch/{}-{}.png'.format(l[1],l[0]))
     data_batch[0]=batch
     data_locations[0]=batch_locations
     with locations_index.get_lock():
@@ -287,6 +316,7 @@ locations = {}
 for b in range(n_models):
     batches[b]=manager.dict()
     locations[b]=manager.dict()
+#batches=manager.dict()
 batch_size=32
 while locations_index.value < len(final_p):
     jobs = []
@@ -304,6 +334,21 @@ while locations_index.value < len(final_p):
         for p in range(len(predictions)):
             x_b, y_b=locations[m][0][p][0], locations[m][0][p][1]
             heatmap[y_b, x_b]=predictions[p][0]
+            if interpret and predictions[p][0]>0.80 and n_samples<int(n_samples_max):
+                print n_samples, n_samples_max, predictions[p][0], n_samples<int(n_samples_max)
+                pred_layer = dmodels[m].layers[-1].name
+                inputs = np.expand_dims(batches[m][0][p], axis=0)
+                conv_layer='res5c_relu'
+                cam_=cam(model, inputs, conv_layer, input_size)
+                #plt.figure()
+                #plt.imshow(cam_)
+                plt.rcParams['figure.figsize']=(5,5)
+                #plt.savefig('{}/{}_{}'.format(new_folder,x_b,y_b))
+                plt.figure()
+                plt.imshow(np.uint8(batches[m][0][p]))
+                plt.imshow(cam_, alpha=.6, cmap='jet')
+                plt.savefig('{}/{}_{}_overlay'.format(new_folder,x_b,y_b))
+                n_samples+=1
             seen[y_b,x_b]=1
 end_time = time.time()
 
@@ -318,18 +363,19 @@ interpolated_heatmap = interpolate.griddata(points, values,
                                        )
 
 
-# In[10]:
+# In[12]:
 
 
 print 'Number of patches analysed: ', np.sum(seen)
 print 'Elapsed time: ', end_time-start_time
 plt.rcParams['figure.figsize']=(25,25)
 plt.imshow(im_contour)
+#plt.imshow(heatmap, alpha=0.5)
 plt.imshow(interpolated_heatmap, alpha=0.5)
 plt.savefig('results/{}_interpolated'.format(file_name))
 
 
-# In[11]:
+# In[13]:
 
 
 interpolated_heatmap = interpolate.griddata(points, values,
@@ -340,92 +386,11 @@ print 'Number of patches analysed: ', np.sum(seen)
 print 'Elapsed time: ', end_time-start_time
 plt.rcParams['figure.figsize']=(25,25)
 plt.imshow(im_contour)
+#plt.imshow(heatmap, alpha=0.5)
 plt.imshow(heatmap, cmap="jet", alpha=0.5)
 plt.savefig('results/{}'.format(file_name))
 f=open('results/{}_log.txt'.format(file_name),'w')
 f.write('Number of patches analysed: {}\n'.format(np.sum(seen)))
 f.write('Elapsed time: {} s'.format(end_time-start_time))
 f.close()
-
-
-# In[25]:
-
-
-if interpret:
-    import interpret
-    reload(interpret)
-    from interpret import *
-    print "interpreting network"
-    res_folder = 'results/'
-    new_folder = res_folder + 'interpretability/'
-    if not os.path.exists(new_folder):
-        os.makedirs(new_folder)
-    new_folder = res_folder + 'interpretability/{}'.format(input_file)
-    if not os.path.exists(new_folder):
-        os.makedirs(new_folder)
-    
-    def worker(slide, locations_vector, locations_index, data_batch, data_locations, batch_size=32):
-        """worker function for multiprocessing"""
-        batch=[]
-        batch_locations = locations_vector[locations_index.value:locations_index.value+batch_size]
-        for l in batch_locations:
-            #l[0] is x, l[1] is y
-            patch=np.asarray(slide.read_region((l[0]*128,l[1]*128),0,(224,224)))[...,:3]
-            batch.append(np.asarray(patch)[...,:3])
-        data_batch[0]=batch
-        data_locations[0]=batch_locations
-        with locations_index.get_lock():
-            locations_index.value +=batch_size
-            return
-
-    start_time = time.time()
-    locations_index = multiprocessing.Value("i", 0)
-    manager = multiprocessing.Manager()
-    batches = {}
-    locations = {}
-    for b in range(n_models):
-        batches[b]=manager.dict()
-        locations[b]=manager.dict()
-    batch_size=32
-    input_size = model.input_shape[1:-1]
-    
-    n_samples=0
-    for n_samples in range(int(n_samples_max)):
-        while locations_index.value < len(final_p):
-            jobs = []
-            for m in range(n_models):
-                p = multiprocessing.Process(target=worker, 
-                                            args=(slide, 
-                                                  final_p, 
-                                                  locations_index, 
-                                                  batches[m], 
-                                                  locations[m]))
-                jobs.append(p)
-                p.start() 
-                p.join()
-                predictions=dmodels[m].predict(np.reshape(batches[m][0],(len(batches[m][0]),224,224,3)))
-
-                for p in range(len(predictions)):
-                    x_b, y_b=locations[m][0][p][0], locations[m][0][p][1]
-                    pred_layer = dmodels[m].layers[-1].name
-                    inputs = np.expand_dims(batches[m][0][p], axis=0)
-                    conv_layer='res5c_relu'
-                    cam_=cam(model, inputs, conv_layer, input_size)
-                    plt.figure()
-                    plt.imshow(cam_)
-                    plt.rcParams['figure.figsize']=(5,5)
-                    plt.savefig('{}/{}_{}'.format(new_folder,x_b,y_b))
-                    plt.figure()
-                    plt.imshow(np.uint8(batches[m][0][p]))
-                    plt.imshow(cam_, alpha=.5)
-                    plt.savefig('{}/{}_{}_overlay'.format(new_folder,x_b,y_b))
-                    #heatmap[y_b, x_b]=predictions[p][0]
-                    #seen[y_b,x_b]=1
-        end_time = time.time()
-
-
-# In[23]:
-
-
-int(n_samples_max)
 
