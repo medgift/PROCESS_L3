@@ -1,5 +1,4 @@
 
-
 # coding: utf-8
 
 # In[1]:
@@ -290,32 +289,20 @@ for p in positions:
 
 # In[ ]:
 
-
 def worker(slide, locations_vector, locations_index, data_batch, data_locations, batch_size=32):
     """worker function for multiprocessing"""
     batch=[]
-    N=0
-    batch_locations=[]
-    i=0
-    #print 'len', len(locations_vector)
-    while N<batch_size and locations_index.value+i<(len(locations_vector)-1):
-        #batch_locations = locations_vector[locations_index.value:locations_index.value+batch_size]
-        l=locations_vector[locations_index.value+i]
-        #for l in batch_locations:
+    batch_locations = locations_vector[locations_index.value:locations_index.value+batch_size]
+    for l in batch_locations:
         #l[0] is x, l[1] is y
         patch=np.asarray(slide.read_region((l[0]*128,l[1]*128),0,(224,224)))[...,:3]
-        #print l[0], l[1]
-        #if np.sum(patch)>80.:# and np.mean(patch)<200:
         batch.append(np.asarray(patch)[...,:3])
-        batch_locations.append(l)
-        N+=1
-        i+=1
-    #print 'outofwhile'
-    #Image.fromarray(patch).save('prova_batch/{}-{}.png'.format(l[1],l[0]))
+        print l[0], l[1]
+        #Image.fromarray(patch).save('prova_batch/{}-{}.png'.format(l[1],l[0]))
     data_batch[0]=batch
     data_locations[0]=batch_locations
     with locations_index.get_lock():
-        locations_index.value +=i
+        locations_index.value +=batch_size
     return
 
 start_time = time.time()
@@ -368,7 +355,7 @@ while locations_index.value < len(final_p):
                 plt.savefig('{}/{}_{}_overlay'.format(new_folder,x_b,y_b))
                 n_samples+=1
             seen[y_b,x_b]=1
-            
+
             
             
 end_time = time.time()
@@ -392,10 +379,11 @@ print 'Elapsed time: ', end_time-start_time
 plt.rcParams['figure.figsize']=(25,25)
 plt.figure()
 plt.imshow(im_contour)
-#plt.imshow(heatmap, alpha=0.5)
-plt.imshow(interpolated_heatmap, alpha=0.5)
+plt.imshow(interpolated_heatmap, alpha=0.5, cmap='jet')
 plt.savefig('results/{}_interpolated'.format(file_name))
-
+plt.figure()
+plt.imshow(seen)
+plt.savefig('results/{}_seen'.format(file_name))
 
 # In[ ]:
 
@@ -409,7 +397,6 @@ print 'Elapsed time: ', end_time-start_time
 plt.rcParams['figure.figsize']=(25,25)
 plt.figure()
 plt.imshow(im_contour)
-#plt.imshow(heatmap, alpha=0.5)
 plt.imshow(heatmap, cmap="jet", alpha=0.5)
 plt.savefig('results/{}'.format(file_name))
 f=open('results/{}_log.txt'.format(file_name),'w')
