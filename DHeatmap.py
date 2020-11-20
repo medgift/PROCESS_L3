@@ -297,7 +297,7 @@ def worker(slide, locations_vector, locations_index, data_batch, data_locations,
         #l[0] is x, l[1] is y
         patch=np.asarray(slide.read_region((l[0]*128,l[1]*128),0,(224,224)))[...,:3]
         batch.append(np.asarray(patch)[...,:3])
-        print l[0], l[1]
+        #print l[0], l[1]
         #Image.fromarray(patch).save('prova_batch/{}-{}.png'.format(l[1],l[0]))
     data_batch[0]=batch
     data_locations[0]=batch_locations
