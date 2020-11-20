@@ -2,7 +2,8 @@
 # coding: utf-8
 
 # In[1]:
-
+import matplotlib as mpl   
+mpl.use('Agg')
 
 import sys
 sys.path.append('lib')
@@ -288,7 +289,6 @@ for p in positions:
 
 # In[ ]:
 
-
 def worker(slide, locations_vector, locations_index, data_batch, data_locations, batch_size=32):
     """worker function for multiprocessing"""
     batch=[]
@@ -297,6 +297,7 @@ def worker(slide, locations_vector, locations_index, data_batch, data_locations,
         #l[0] is x, l[1] is y
         patch=np.asarray(slide.read_region((l[0]*128,l[1]*128),0,(224,224)))[...,:3]
         batch.append(np.asarray(patch)[...,:3])
+        print l[0], l[1]
         #Image.fromarray(patch).save('prova_batch/{}-{}.png'.format(l[1],l[0]))
     data_batch[0]=batch
     data_locations[0]=batch_locations
@@ -314,6 +315,7 @@ for b in range(n_models):
     locations[b]=manager.dict()
 #batches=manager.dict()
 batch_size=32
+n_batches_=0
 while locations_index.value < len(final_p):
     jobs = []
     for m in range(n_models):
@@ -327,25 +329,35 @@ while locations_index.value < len(final_p):
         p.start() 
         p.join()
         predictions=dmodels[m].predict(np.reshape(batches[m][0],(len(batches[m][0]),224,224,3)))
+        n_batches_+=1
         for p in range(len(predictions)):
             x_b, y_b=locations[m][0][p][0], locations[m][0][p][1]
             heatmap[y_b, x_b]=predictions[p][0]
-            if interpret and predictions[p][0]>0.80 and n_samples<int(n_samples_max):
+            if interpret and predictions[p][0]>0.82 and n_samples<int(n_samples_max) and n_batches_>200:
                 print n_samples, n_samples_max, predictions[p][0], n_samples<int(n_samples_max)
                 pred_layer = dmodels[m].layers[-1].name
                 inputs = np.expand_dims(batches[m][0][p], axis=0)
-                conv_layer='res5c_relu'
+                if settings['model_type']=='resnet101':
+                    conv_layer='res5c_relu'
+                elif settings['model_type']=='inceptionv3':
+                    conv_layer='mixed10'
+                else:
+                    conv_layer=model.layers[-3].name
                 cam_=cam(model, inputs, conv_layer, input_size)
                 #plt.figure()
                 #plt.imshow(cam_)
                 plt.rcParams['figure.figsize']=(5,5)
                 #plt.savefig('{}/{}_{}'.format(new_folder,x_b,y_b))
                 plt.figure()
+                plt.title('(x, y) coordinates: ({}, {}) prediction: {}'.format(x_b, y_b, predictions[p][0]))
                 plt.imshow(np.uint8(batches[m][0][p]))
                 plt.imshow(cam_, alpha=.6, cmap='jet')
                 plt.savefig('{}/{}_{}_overlay'.format(new_folder,x_b,y_b))
                 n_samples+=1
             seen[y_b,x_b]=1
+
+            
+            
 end_time = time.time()
 
 points = np.asarray(seen.nonzero()).T
@@ -359,19 +371,21 @@ interpolated_heatmap = interpolate.griddata(points, values,
                                        )
 
 
-# In[12]:
+# In[ ]:
 
 
 print 'Number of patches analysed: ', np.sum(seen)
 print 'Elapsed time: ', end_time-start_time
 plt.rcParams['figure.figsize']=(25,25)
+plt.figure()
 plt.imshow(im_contour)
-#plt.imshow(heatmap, alpha=0.5)
-plt.imshow(interpolated_heatmap, alpha=0.5)
+plt.imshow(interpolated_heatmap, alpha=0.5, cmap='jet')
 plt.savefig('results/{}_interpolated'.format(file_name))
+plt.figure()
+plt.imshow(seen)
+plt.savefig('results/{}_seen'.format(file_name))
 
-
-# In[13]:
+# In[ ]:
 
 
 interpolated_heatmap = interpolate.griddata(points, values,
@@ -381,12 +395,11 @@ interpolated_heatmap = interpolate.griddata(points, values,
 print 'Number of patches analysed: ', np.sum(seen)
 print 'Elapsed time: ', end_time-start_time
 plt.rcParams['figure.figsize']=(25,25)
+plt.figure()
 plt.imshow(im_contour)
-#plt.imshow(heatmap, alpha=0.5)
 plt.imshow(heatmap, cmap="jet", alpha=0.5)
 plt.savefig('results/{}'.format(file_name))
 f=open('results/{}_log.txt'.format(file_name),'w')
 f.write('Number of patches analysed: {}\n'.format(np.sum(seen)))
 f.write('Elapsed time: {} s'.format(end_time-start_time))
 f.close()
-
