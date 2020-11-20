@@ -1,4 +1,5 @@
 
+
 # coding: utf-8
 
 # In[1]:
@@ -389,6 +390,7 @@ interpolated_heatmap = interpolate.griddata(points, values,
 print 'Number of patches analysed: ', np.sum(seen)
 print 'Elapsed time: ', end_time-start_time
 plt.rcParams['figure.figsize']=(25,25)
+plt.figure()
 plt.imshow(im_contour)
 #plt.imshow(heatmap, alpha=0.5)
 plt.imshow(interpolated_heatmap, alpha=0.5)
@@ -405,6 +407,7 @@ interpolated_heatmap = interpolate.griddata(points, values,
 print 'Number of patches analysed: ', np.sum(seen)
 print 'Elapsed time: ', end_time-start_time
 plt.rcParams['figure.figsize']=(25,25)
+plt.figure()
 plt.imshow(im_contour)
 #plt.imshow(heatmap, alpha=0.5)
 plt.imshow(heatmap, cmap="jet", alpha=0.5)
@@ -413,11 +416,3 @@ f=open('results/{}_log.txt'.format(file_name),'w')
 f.write('Number of patches analysed: {}\n'.format(np.sum(seen)))
 f.write('Elapsed time: {} s'.format(end_time-start_time))
 f.close()
-
-
-# In[ ]:
-
-
-#concept_relevance=plt.imread('results/interpretability/concept_attribution/concept_relevance.png')
-#plt.imshow(concept_relevance)
-
