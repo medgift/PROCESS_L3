@@ -2,7 +2,8 @@
 # coding: utf-8
 
 # In[1]:
-
+import matplotlib as mpl   
+mpl.use('Agg')
 
 import sys
 sys.path.append('lib')
@@ -296,7 +297,7 @@ def worker(slide, locations_vector, locations_index, data_batch, data_locations,
     batch_locations=[]
     i=0
     #print 'len', len(locations_vector)
-    while N<batch_size:
+    while N<batch_size and locations_index.value+i<(len(locations_vector)-1):
         #batch_locations = locations_vector[locations_index.value:locations_index.value+batch_size]
         l=locations_vector[locations_index.value+i]
         #for l in batch_locations:
