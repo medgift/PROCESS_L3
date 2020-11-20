@@ -307,7 +307,7 @@ def worker(slide, locations_vector, locations_index, data_batch, data_locations,
         batch.append(np.asarray(patch)[...,:3])
         batch_locations.append(l)
         N+=1
-        #i+=1
+        i+=1
     #print 'outofwhile'
     #Image.fromarray(patch).save('prova_batch/{}-{}.png'.format(l[1],l[0]))
     data_batch[0]=batch
