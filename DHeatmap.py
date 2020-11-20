@@ -365,17 +365,18 @@ values = heatmap[heatmap.nonzero()]
 
 grid_x, grid_y = np.mgrid[0:slide.level_dimensions[slide_level][1]:1, 
                           0:slide.level_dimensions[slide_level][0]:1]
-interpolated_heatmap = interpolate.griddata(points, values,
-                                      (grid_x, grid_y), 
-                                        fill_value=0.
-                                       )
-
 
 # In[ ]:
 
+# In[ ]:
 
-print 'Number of patches analysed: ', np.sum(seen)
-print 'Elapsed time: ', end_time-start_time
+try:
+    interpolated_heatmap = interpolate.griddata(points, values,
+                                      (grid_x, grid_y), 
+                                        fill_value=1.
+                                       )
+except:
+    interpolated_heatmap=heatmap
 plt.rcParams['figure.figsize']=(25,25)
 plt.figure()
 plt.imshow(im_contour)
@@ -384,14 +385,6 @@ plt.savefig('results/{}_interpolated'.format(file_name))
 plt.figure()
 plt.imshow(seen)
 plt.savefig('results/{}_seen'.format(file_name))
-
-# In[ ]:
-
-
-interpolated_heatmap = interpolate.griddata(points, values,
-                                      (grid_x, grid_y), 
-                                        fill_value=1.
-                                       )
 print 'Number of patches analysed: ', np.sum(seen)
 print 'Elapsed time: ', end_time-start_time
 plt.rcParams['figure.figsize']=(25,25)
