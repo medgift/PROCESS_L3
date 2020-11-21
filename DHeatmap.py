@@ -274,7 +274,7 @@ print 'Heatmap dimensions: ', dim_x, dim_y
 
 heatmap=np.zeros((slide.level_dimensions[slide_level][1], slide.level_dimensions[slide_level][0]))
 seen=np.zeros((slide.level_dimensions[slide_level][1], slide.level_dimensions[slide_level][0]))        
-resolution=2
+resolution=8
 mesh = np.meshgrid(np.arange(0, slide.level_dimensions[slide_level][0], 2),np.arange(0, slide.level_dimensions[slide_level][1], 2))
 positions = np.vstack(map(np.ravel, mesh)).T
 final_p=[]
@@ -333,7 +333,7 @@ while locations_index.value < len(final_p):
         for p in range(len(predictions)):
             x_b, y_b=locations[m][0][p][0], locations[m][0][p][1]
             heatmap[y_b, x_b]=predictions[p][0]
-            if interpret and predictions[p][0]>0.82 and n_samples<int(n_samples_max) and n_batches_>200:
+            if interpret and predictions[p][0]>0.82 and n_samples<int(n_samples_max) and n_batches_>100:
                 print n_samples, n_samples_max, predictions[p][0], n_samples<int(n_samples_max)
                 pred_layer = dmodels[m].layers[-1].name
                 inputs = np.expand_dims(batches[m][0][p], axis=0)
